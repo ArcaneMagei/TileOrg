@@ -42,6 +42,36 @@ function fileToDataURL(file) {
   });
 }
 
+async function fileToOptimizedDataURL(file) {
+  if (!file.type.startsWith("image/")) throw new Error("Unsupported file type");
+  try {
+    const img = await createImageBitmap(file);
+    const maxEdge = 320;
+    const ratio = Math.min(1, maxEdge / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * ratio));
+    const h = Math.max(1, Math.round(img.height * ratio));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d", { alpha: false });
+    ctx.drawImage(img, 0, 0, w, h);
+    img.close();
+    return canvas.toDataURL("image/jpeg", 0.82);
+  } catch {
+    return fileToDataURL(file);
+  }
+}
+
+function safeSetStorage(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function saveState() {
   if (hydrating) return;
   const tileRows = [...controls.tileTypes.querySelectorAll(".tile-type-row")];
@@ -68,12 +98,17 @@ function saveState() {
     overlays: overlayState
   };
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+  const serialized = JSON.stringify(payload);
+  if (!safeSetStorage(STORAGE_KEY, serialized)) {
+    const trimmed = { ...payload, tileTypes: payload.tileTypes.map((t) => ({ ...t, image: "" })) };
+    safeSetStorage(STORAGE_KEY, JSON.stringify(trimmed));
+  }
 }
 
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return;
+
   try {
     hydrating = true;
     const saved = JSON.parse(raw);
@@ -141,7 +176,11 @@ function buildTileTypeControls() {
     imageFile.addEventListener("change", async () => {
       const [file] = imageFile.files || [];
       if (!file) return;
-      row.dataset.image = await fileToDataURL(file);
+      try {
+        row.dataset.image = await fileToOptimizedDataURL(file);
+      } catch {
+        row.dataset.image = "";
+      }
       paintThumb();
       saveState();
       renderWall();
