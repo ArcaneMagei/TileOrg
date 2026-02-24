@@ -30,6 +30,13 @@ const wall = document.getElementById("wall");
 const tileTemplate = document.getElementById("tileTypeTemplate");
 const overlayState = [];
 
+function ensureNineModels() {
+  while (defaultTileTypes.length < 9) {
+    const i = defaultTileTypes.length + 1;
+    defaultTileTypes.push({ name: `Tile ${i}`, color: "#cccccc", packs: 2, perPack: 10, image: "" });
+  }
+}
+
 function fileToDataURL(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -47,6 +54,9 @@ function updateTileThumb(row) {
 }
 
 function buildTileTypeControls() {
+  controls.tileTypes.textContent = "";
+  ensureNineModels();
+
   defaultTileTypes.forEach((tile, index) => {
     const fragment = tileTemplate.content.cloneNode(true);
     const row = fragment.querySelector(".tile-type-row");
@@ -109,9 +119,7 @@ function getTileTypes() {
 function buildStackRects(rows, cols) {
   const rects = [];
   for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) {
-      rects.push({ r, c, w: 1, h: 1 });
-    }
+    for (let c = 0; c < cols; c += 1) rects.push({ r, c });
   }
   return rects;
 }
@@ -130,8 +138,9 @@ function generateTileSelection(totalTiles, tileTypes) {
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
 
-  if (pool.length >= totalTiles) return pool.slice(0, totalTiles);
-  return Array.from({ length: totalTiles }, (_, i) => pool[i % pool.length]);
+  return pool.length >= totalTiles
+    ? pool.slice(0, totalTiles)
+    : Array.from({ length: totalTiles }, (_, i) => pool[i % pool.length]);
 }
 
 function arrangementForCell(patternType, row, col, tileTypes) {
@@ -140,7 +149,7 @@ function arrangementForCell(patternType, row, col, tileTypes) {
     aligned: (row + col) % totalTypes,
     checker: (row + col) % 2 === 0 ? row % totalTypes : (row + 1) % totalTypes,
     diagonal: (row * 2 + col) % totalTypes,
-    pinwheel: ((Math.floor(row / 2) + Math.floor(col / 2)) % totalTypes)
+    pinwheel: (Math.floor(row / 2) + Math.floor(col / 2)) % totalTypes
   };
 
   const rotateBy = {
@@ -183,9 +192,7 @@ function attachOverlayDrag(el, overlay) {
     applyOverlayStyle(el, overlay);
   });
 
-  el.addEventListener("pointerup", () => {
-    dragging = false;
-  });
+  el.addEventListener("pointerup", () => { dragging = false; });
 }
 
 function attachOverlayResize(handle, host, overlay) {
@@ -212,9 +219,7 @@ function attachOverlayResize(handle, host, overlay) {
     applyOverlayStyle(host, overlay);
   });
 
-  handle.addEventListener("pointerup", () => {
-    resizing = false;
-  });
+  handle.addEventListener("pointerup", () => { resizing = false; });
 }
 
 function renderOverlays() {
@@ -230,7 +235,6 @@ function renderOverlays() {
 
     attachOverlayDrag(el, overlay);
     attachOverlayResize(handle, el, overlay);
-
     wall.appendChild(el);
   });
 }
@@ -246,11 +250,16 @@ function renderWall() {
   controls.groutSizeValue.textContent = `${groutSize}px`;
   controls.viewerScaleValue.textContent = `${controls.viewerScale.value}%`;
 
-  const totalWidth = columns * tileWidthCm;
-  const totalHeight = rows * tileHeightCm;
-  wall.style.aspectRatio = `${totalWidth} / ${totalHeight}`;
+  const totalWidthCm = columns * tileWidthCm;
+  const totalHeightCm = rows * tileHeightCm;
+
+  const pxPerCm = 3.6 * viewerScale;
+  const wallWidthPx = Math.max(220, totalWidthCm * pxPerCm);
+  const wallHeightPx = Math.max(220, totalHeightCm * pxPerCm);
+
   wall.style.background = controls.groutColor.value;
-  wall.style.width = `${Math.round(700 * viewerScale)}px`;
+  wall.style.width = `${wallWidthPx}px`;
+  wall.style.height = `${wallHeightPx}px`;
 
   wall.querySelectorAll(".tile").forEach((tile) => tile.remove());
 
@@ -259,8 +268,8 @@ function renderWall() {
   const patternType = controls.patternType.value;
   const randomTiles = patternType === "random" ? generateTileSelection(rects.length, tileTypes) : null;
 
-  const pitchW = wall.clientWidth / columns;
-  const pitchH = wall.clientHeight / rows;
+  const pitchW = wallWidthPx / columns;
+  const pitchH = wallHeightPx / rows;
 
   rects.forEach((rect, index) => {
     const tile = document.createElement("div");
@@ -268,21 +277,21 @@ function renderWall() {
       ? { tile: randomTiles[index % randomTiles.length], rotate: [0, 90, 180, 270][index % 4] }
       : arrangementForCell(patternType, rect.r, rect.c, tileTypes);
 
-    const chosen = arrangement.tile;
     tile.className = "tile";
-    tile.style.backgroundColor = chosen.color;
-    if (chosen.image) {
-      tile.style.backgroundImage = `url(${chosen.image})`;
+    tile.style.backgroundColor = arrangement.tile.color;
+
+    if (arrangement.tile.image) {
+      tile.style.backgroundImage = `url(${arrangement.tile.image})`;
       tile.style.backgroundSize = "cover";
       tile.style.backgroundPosition = "center";
     }
 
-    tile.title = chosen.name;
-
+    tile.title = arrangement.tile.name;
     tile.style.left = `${rect.c * pitchW + groutSize / 2}px`;
     tile.style.top = `${rect.r * pitchH + groutSize / 2}px`;
     tile.style.width = `${Math.max(2, pitchW - groutSize)}px`;
     tile.style.height = `${Math.max(2, pitchH - groutSize)}px`;
+
     if (arrangement.rotate) {
       tile.style.transform = `rotate(${arrangement.rotate}deg)`;
       tile.style.transformOrigin = "center";
