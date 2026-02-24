@@ -1,4 +1,4 @@
-const STORAGE_KEY = "tile-wall-simulator-state-v3";
+const STORAGE_KEY = "tile-wall-simulator-state-v4";
 
 const defaultTileTypes = [
   { name: "Carrara", color: "#efeae2", packs: 4, perPack: 12, image: "" },
@@ -25,6 +25,8 @@ const controls = {
   patternType: document.getElementById("patternType"),
   tileTypes: document.getElementById("tileTypes"),
   overlayShape: document.getElementById("overlayShape"),
+  overlayColor: document.getElementById("overlayColor"),
+  overlayOpacity: document.getElementById("overlayOpacity"),
   addOverlay: document.getElementById("addOverlay")
 };
 
@@ -43,19 +45,16 @@ function fileToDataURL(file) {
 }
 
 async function fileToOptimizedDataURL(file) {
-  if (!file.type.startsWith("image/")) throw new Error("Unsupported file type");
   try {
     const img = await createImageBitmap(file);
     const maxEdge = 320;
     const ratio = Math.min(1, maxEdge / Math.max(img.width, img.height));
     const w = Math.max(1, Math.round(img.width * ratio));
     const h = Math.max(1, Math.round(img.height * ratio));
-
     const canvas = document.createElement("canvas");
     canvas.width = w;
     canvas.height = h;
-    const ctx = canvas.getContext("2d", { alpha: false });
-    ctx.drawImage(img, 0, 0, w, h);
+    canvas.getContext("2d", { alpha: false }).drawImage(img, 0, 0, w, h);
     img.close();
     return canvas.toDataURL("image/jpeg", 0.82);
   } catch {
@@ -84,16 +83,9 @@ function saveState() {
   }));
 
   const payload = {
-    controls: {
-      columns: controls.columns.value,
-      rows: controls.rows.value,
-      tileWidthCm: controls.tileWidthCm.value,
-      tileHeightCm: controls.tileHeightCm.value,
-      viewerScale: controls.viewerScale.value,
-      groutColor: controls.groutColor.value,
-      groutSizeMm: controls.groutSizeMm.value,
-      patternType: controls.patternType.value
-    },
+    controls: Object.fromEntries(Object.entries(controls)
+      .filter(([k, v]) => v instanceof HTMLInputElement || v instanceof HTMLSelectElement)
+      .map(([k, v]) => [k, v.value])),
     tileTypes,
     overlays: overlayState
   };
@@ -108,7 +100,6 @@ function saveState() {
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return;
-
   try {
     hydrating = true;
     const saved = JSON.parse(raw);
@@ -121,13 +112,11 @@ function loadState() {
 
     if (Array.isArray(saved.tileTypes)) {
       saved.tileTypes.slice(0, 9).forEach((tile, i) => {
-        if (!defaultTileTypes[i]) return;
         defaultTileTypes[i] = {
-          name: tile.name || defaultTileTypes[i].name,
-          color: tile.color || defaultTileTypes[i].color,
+          ...defaultTileTypes[i],
+          ...tile,
           packs: Number.isFinite(tile.packs) ? tile.packs : defaultTileTypes[i].packs,
-          perPack: Number.isFinite(tile.perPack) ? tile.perPack : defaultTileTypes[i].perPack,
-          image: tile.image || ""
+          perPack: Number.isFinite(tile.perPack) ? tile.perPack : defaultTileTypes[i].perPack
         };
       });
     }
@@ -145,7 +134,6 @@ function loadState() {
 
 function buildTileTypeControls() {
   controls.tileTypes.textContent = "";
-
   defaultTileTypes.slice(0, 9).forEach((tile, index) => {
     const fragment = tileTemplate.content.cloneNode(true);
     const row = fragment.querySelector(".tile-type-row");
@@ -176,11 +164,7 @@ function buildTileTypeControls() {
     imageFile.addEventListener("change", async () => {
       const [file] = imageFile.files || [];
       if (!file) return;
-      try {
-        row.dataset.image = await fileToOptimizedDataURL(file);
-      } catch {
-        row.dataset.image = "";
-      }
+      row.dataset.image = await fileToOptimizedDataURL(file);
       paintThumb();
       saveState();
       renderWall();
@@ -204,81 +188,102 @@ function getTileTypes() {
     id: index,
     name: row.querySelector(".tile-name").value || `Tile ${index + 1}`,
     color: row.querySelector(".tile-color").value,
-    packs: Number(row.querySelector(".tile-pack").value || 0),
-    perPack: Number(row.querySelector(".tiles-per-pack").value || 0),
     total: Number(row.querySelector(".tile-pack").value || 0) * Number(row.querySelector(".tiles-per-pack").value || 0),
     image: row.dataset.image || ""
   }));
 }
 
-function randomNoAdjacent(rows, cols, tileTypes) {
+function noAdjAssign(rows, cols, order) {
   const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+  const n = order.length;
   for (let r = 0; r < rows; r += 1) {
     for (let c = 0; c < cols; c += 1) {
       const left = c > 0 ? grid[r][c - 1] : -1;
       const up = r > 0 ? grid[r - 1][c] : -1;
-      const options = tileTypes.map((_, i) => i).filter((i) => i !== left && i !== up);
-      grid[r][c] = options[Math.floor(Math.random() * options.length)];
+      const base = (r * 3 + c * 5 + (r % 2) * 2) % n;
+      let pick = order[base];
+      if (pick === left || pick === up) {
+        for (let k = 1; k < n; k += 1) {
+          const candidate = order[(base + k) % n];
+          if (candidate !== left && candidate !== up) {
+            pick = candidate;
+            break;
+          }
+        }
+      }
+      grid[r][c] = pick;
     }
   }
   return grid;
 }
 
-function inventoryPool(tileTypes) {
-  const pool = [];
-  tileTypes.forEach((tile, i) => {
-    const variance = Math.floor(Math.random() * 21) - 10;
-    const count = Math.max(0, tile.total + variance);
-    for (let x = 0; x < count; x += 1) pool.push(i);
-  });
-  for (let i = pool.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
+function ensureAllModelsUsed(grid, n) {
+  const rows = grid.length;
+  const cols = grid[0]?.length || 0;
+  const used = new Set(grid.flat());
+  for (let model = 0; model < n; model += 1) {
+    if (used.has(model)) continue;
+    for (let r = 0; r < rows; r += 1) {
+      let placed = false;
+      for (let c = 0; c < cols; c += 1) {
+        const left = c > 0 ? grid[r][c - 1] : -1;
+        const right = c + 1 < cols ? grid[r][c + 1] : -1;
+        const up = r > 0 ? grid[r - 1][c] : -1;
+        const down = r + 1 < rows ? grid[r + 1][c] : -1;
+        if (![left, right, up, down].includes(model)) {
+          grid[r][c] = model;
+          used.add(model);
+          placed = true;
+          break;
+        }
+      }
+      if (placed) break;
+    }
   }
-  return pool;
 }
 
 function buildPatternGrid(pattern, rows, cols, tileTypes) {
   const n = tileTypes.length;
-  const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+  const indices = [...Array(n).keys()];
+  let grid;
 
-  if (pattern === "antiNeighborRandom") return randomNoAdjacent(rows, cols, tileTypes);
-
-  if (pattern === "inventoryBlend") {
-    const pool = inventoryPool(tileTypes);
-    let cursor = 0;
-    for (let r = 0; r < rows; r += 1) {
-      for (let c = 0; c < cols; c += 1) {
-        if (!pool.length) {
-          grid[r][c] = (r * 3 + c * 5) % n;
-          continue;
-        }
-        let tries = 0;
-        let idx = pool[cursor % pool.length];
-        while (tries < pool.length) {
-          const left = c > 0 ? grid[r][c - 1] : -1;
-          const up = r > 0 ? grid[r - 1][c] : -1;
-          if (idx !== left && idx !== up) break;
-          cursor += 1;
-          idx = pool[cursor % pool.length];
-          tries += 1;
-        }
-        grid[r][c] = idx;
-        cursor += 1;
-      }
+  if (pattern === "antiNeighborRandom") {
+    const shuffled = [...indices].sort(() => Math.random() - 0.5);
+    grid = noAdjAssign(rows, cols, shuffled);
+  } else if (pattern === "antiNeighborBands") {
+    const order = [0, 3, 6, 1, 4, 7, 2, 5, 8].map((x) => x % n);
+    grid = noAdjAssign(rows, cols, order);
+  } else if (pattern === "antiNeighborSpiral") {
+    const order = [0, 4, 8, 2, 6, 1, 5, 7, 3].map((x) => x % n);
+    grid = noAdjAssign(rows, cols, order);
+  } else if (pattern === "antiNeighborDiagonal") {
+    const order = [0, 5, 1, 6, 2, 7, 3, 8, 4].map((x) => x % n);
+    grid = noAdjAssign(rows, cols, order);
+  } else if (pattern === "antiNeighborBlocks") {
+    const order = [0, 2, 4, 6, 8, 1, 3, 5, 7].map((x) => x % n);
+    grid = noAdjAssign(rows, cols, order);
+  } else if (pattern === "inventoryBlend") {
+    const pool = tileTypes.flatMap((t, i) => {
+      const variance = Math.floor(Math.random() * 21) - 10;
+      const count = Math.max(0, t.total + variance);
+      return Array.from({ length: count }, () => i);
+    });
+    if (!pool.length) pool.push(...indices);
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
     }
-    return grid;
+    const order = [...new Set(pool.concat(indices))];
+    grid = noAdjAssign(rows, cols, order);
+  } else if (pattern === "latinShift") {
+    grid = noAdjAssign(rows, cols, [0, 3, 6, 1, 4, 7, 2, 5, 8].map((x) => x % n));
+  } else if (pattern === "diamondWave") {
+    grid = noAdjAssign(rows, cols, [8, 4, 0, 7, 3, 6, 2, 5, 1].map((x) => x % n));
+  } else {
+    grid = noAdjAssign(rows, cols, [0, 5, 2, 7, 4, 1, 6, 3, 8].map((x) => x % n));
   }
 
-  for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) {
-      if (pattern === "latinShift") grid[r][c] = (r * 4 + c * 2 + Math.floor(r / 2)) % n;
-      else if (pattern === "diamondWave") grid[r][c] = (Math.abs(r - c) + r + c) % n;
-      else if (pattern === "checker9") grid[r][c] = (r * 5 + c * 7 + (r % 2) * 3) % n;
-      else grid[r][c] = (r + c) % n;
-    }
-  }
-
+  if (rows * cols >= n) ensureAllModelsUsed(grid, n);
   return grid;
 }
 
@@ -287,6 +292,8 @@ function applyOverlayStyle(el, overlay) {
   el.style.top = `${overlay.y}px`;
   el.style.width = `${overlay.width}px`;
   el.style.height = `${overlay.height}px`;
+  el.style.backgroundColor = overlay.color;
+  el.style.opacity = String(overlay.opacity);
 }
 
 function renderOverlays() {
@@ -376,15 +383,16 @@ function renderWall() {
   const tilePxH = tileHeightCm * pxPerCm;
   const groutPx = (groutMm / 10) * pxPerCm;
 
-  const wallW = Math.round(columns * tilePxW);
-  const wallH = Math.round(rows * tilePxH);
+  const pitchX = tilePxW + groutPx;
+  const pitchY = tilePxH + groutPx;
+  const wallW = Math.round(columns * tilePxW + (columns + 1) * groutPx);
+  const wallH = Math.round(rows * tilePxH + (rows + 1) * groutPx);
 
   wall.style.width = `${wallW}px`;
   wall.style.height = `${wallH}px`;
   wall.style.background = controls.groutColor.value;
 
   wall.querySelectorAll(".tile").forEach((x) => x.remove());
-
   const tileTypes = getTileTypes();
   const patternGrid = buildPatternGrid(controls.patternType.value, rows, columns, tileTypes);
 
@@ -395,10 +403,10 @@ function renderWall() {
 
       const tile = document.createElement("div");
       tile.className = "tile";
-      tile.style.left = `${c * tilePxW + groutPx / 2}px`;
-      tile.style.top = `${r * tilePxH + groutPx / 2}px`;
-      tile.style.width = `${Math.max(1, tilePxW - groutPx)}px`;
-      tile.style.height = `${Math.max(1, tilePxH - groutPx)}px`;
+      tile.style.left = `${groutPx + c * pitchX}px`;
+      tile.style.top = `${groutPx + r * pitchY}px`;
+      tile.style.width = `${tilePxW}px`;
+      tile.style.height = `${tilePxH}px`;
       tile.style.backgroundColor = model.color;
       if (model.image) {
         tile.style.backgroundImage = `url(${model.image})`;
@@ -413,7 +421,7 @@ function renderWall() {
   renderOverlays();
 }
 
-["columns", "rows", "tileWidthCm", "tileHeightCm", "viewerScale", "groutColor", "groutSizeMm", "patternType"].forEach((k) => {
+["columns", "rows", "tileWidthCm", "tileHeightCm", "viewerScale", "groutColor", "groutSizeMm", "patternType", "overlayColor", "overlayOpacity"].forEach((k) => {
   controls[k].addEventListener("input", () => {
     saveState();
     renderWall();
@@ -423,6 +431,8 @@ function renderWall() {
 controls.addOverlay.addEventListener("click", () => {
   overlayState.push({
     shape: controls.overlayShape.value,
+    color: controls.overlayColor.value,
+    opacity: Number(controls.overlayOpacity.value),
     x: 18 + overlayState.length * 10,
     y: 18 + overlayState.length * 10,
     width: 140,

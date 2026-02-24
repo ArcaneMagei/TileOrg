@@ -141,7 +141,7 @@ button:hover { background: #ebf0ff; }
 .upload-image-btn input { display: none; }
 .clear-image { width: auto; min-width: 58px; }
 
-.overlay-row { display: flex; gap: 0.45rem; align-items: end; }
+.overlay-row { display: flex; gap: 0.45rem; align-items: end; flex-wrap: wrap; }
 
 .viewer-panel {
   overflow: auto;
