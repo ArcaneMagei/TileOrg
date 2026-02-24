@@ -18,8 +18,8 @@ python -m http.server 4173
 - Default wall setup: **3 columns x 13 rows**, tile size **20x20 cm**.
 - Square stack-bond layout with different arrangement styles (including rotation-based variants).
 - Grout controls for color and thickness.
-- Tile type controls for name, color, pack count, and tiles per pack.
-- Image support per tile type via URL or file upload.
+- Nine tile models with controls for name, color, pack count, and tiles per pack.
+- Organized texture picker per tile model with preview, URL input, upload button, and clear action.
 - Viewer scale control to resize the wall preview.
 - Overlay objects (rectangle/ellipse) that can be moved and resized.
 

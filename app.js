@@ -3,7 +3,11 @@ const defaultTileTypes = [
   { name: "Slate", color: "#7e838d", packs: 4, perPack: 10, image: "" },
   { name: "Terracotta", color: "#c87852", packs: 4, perPack: 9, image: "" },
   { name: "Sea Glass", color: "#79c7ba", packs: 4, perPack: 8, image: "" },
-  { name: "Sand", color: "#dcc69d", packs: 4, perPack: 11, image: "" }
+  { name: "Sand", color: "#dcc69d", packs: 4, perPack: 11, image: "" },
+  { name: "Graphite", color: "#5f6675", packs: 3, perPack: 14, image: "" },
+  { name: "Pearl", color: "#f2f2f4", packs: 3, perPack: 13, image: "" },
+  { name: "Olive", color: "#9ba26e", packs: 3, perPack: 12, image: "" },
+  { name: "Navy", color: "#3c4f82", packs: 3, perPack: 10, image: "" }
 ];
 
 const controls = {
@@ -43,10 +47,11 @@ function updateTileThumb(row) {
 }
 
 function buildTileTypeControls() {
-  defaultTileTypes.forEach((tile) => {
+  defaultTileTypes.forEach((tile, index) => {
     const fragment = tileTemplate.content.cloneNode(true);
     const row = fragment.querySelector(".tile-type-row");
     row.dataset.image = tile.image || "";
+    row.querySelector(".tile-model-id").textContent = `Model ${index + 1}`;
 
     row.querySelector(".tile-name").value = tile.name;
     row.querySelector(".tile-color").value = tile.color;
