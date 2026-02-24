@@ -11,6 +11,8 @@ const controls = {
   rows: document.getElementById("rows"),
   tileWidthCm: document.getElementById("tileWidthCm"),
   tileHeightCm: document.getElementById("tileHeightCm"),
+  viewerScale: document.getElementById("viewerScale"),
+  viewerScaleValue: document.getElementById("viewerScaleValue"),
   groutColor: document.getElementById("groutColor"),
   groutSize: document.getElementById("groutSize"),
   groutSizeValue: document.getElementById("groutSizeValue"),
@@ -24,6 +26,15 @@ const wall = document.getElementById("wall");
 const tileTemplate = document.getElementById("tileTypeTemplate");
 const overlayState = [];
 
+function fileToDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 function updateTileThumb(row) {
   const thumb = row.querySelector(".tile-thumb");
   const image = row.dataset.image || "";
@@ -32,7 +43,7 @@ function updateTileThumb(row) {
 }
 
 function buildTileTypeControls() {
-  defaultTileTypes.forEach((tile, index) => {
+  defaultTileTypes.forEach((tile) => {
     const fragment = tileTemplate.content.cloneNode(true);
     const row = fragment.querySelector(".tile-type-row");
     row.dataset.image = tile.image || "";
@@ -47,7 +58,6 @@ function buildTileTypeControls() {
     const clearImage = row.querySelector(".clear-image");
 
     row.querySelectorAll("input:not(.tile-image-file)").forEach((input) => {
-      input.dataset.index = index;
       input.addEventListener("input", () => {
         if (input.classList.contains("tile-image-url")) {
           row.dataset.image = input.value.trim();
@@ -80,15 +90,6 @@ function buildTileTypeControls() {
   });
 }
 
-function fileToDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Failed to read image file"));
-    reader.readAsDataURL(file);
-  });
-}
-
 function getTileTypes() {
   const rows = controls.tileTypes.querySelectorAll(".tile-type-row");
   return [...rows].map((row, index) => ({
@@ -100,20 +101,24 @@ function getTileTypes() {
   }));
 }
 
-function generateTileSelection(totalTiles, patternType, tileTypes) {
-  if (patternType !== "random") {
-    return Array.from({ length: totalTiles }, (_, i) => tileTypes[i % tileTypes.length]);
+function buildStackRects(rows, cols) {
+  const rects = [];
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      rects.push({ r, c, w: 1, h: 1 });
+    }
   }
+  return rects;
+}
 
+function generateTileSelection(totalTiles, tileTypes) {
   const pool = tileTypes.flatMap((tile) => {
     const variance = Math.floor(Math.random() * 21) - 10;
     const count = Math.max(0, tile.total + variance);
     return Array.from({ length: count }, () => tile);
   });
 
-  if (!pool.length) {
-    return Array.from({ length: totalTiles }, () => tileTypes[0]);
-  }
+  if (!pool.length) return Array.from({ length: totalTiles }, () => tileTypes[0]);
 
   for (let i = pool.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -124,138 +129,104 @@ function generateTileSelection(totalTiles, patternType, tileTypes) {
   return Array.from({ length: totalTiles }, (_, i) => pool[i % pool.length]);
 }
 
-function tileRect(row, col, w, h, pw, ph) {
+function arrangementForCell(patternType, row, col, tileTypes) {
+  const totalTypes = tileTypes.length;
+  const indexBy = {
+    aligned: (row + col) % totalTypes,
+    checker: (row + col) % 2 === 0 ? row % totalTypes : (row + 1) % totalTypes,
+    diagonal: (row * 2 + col) % totalTypes,
+    pinwheel: ((Math.floor(row / 2) + Math.floor(col / 2)) % totalTypes)
+  };
+
+  const rotateBy = {
+    aligned: 0,
+    checker: (row + col) % 2 === 0 ? 0 : 90,
+    diagonal: ((row + col) % 4) * 90,
+    pinwheel: (row % 2) * 180 + (col % 2) * 90
+  };
+
   return {
-    left: col * pw,
-    top: row * ph,
-    width: w * pw,
-    height: h * ph
+    tile: tileTypes[indexBy[patternType] ?? 0],
+    rotate: rotateBy[patternType] ?? 0
   };
 }
 
-function buildPatternRects(rows, cols, patternType) {
-  const rects = [];
-
-  if (patternType === "brick") {
-    for (let r = 0; r < rows; r += 1) {
-      for (let c = 0; c < cols; c += 1) {
-        const offset = r % 2 === 1 ? 0.5 : 0;
-        rects.push({ r, c: c + offset, w: 1, h: 1 });
-      }
-    }
-    return rects;
-  }
-
-  if (patternType === "herringbone") {
-    for (let r = 0; r < rows; r += 1) {
-      for (let c = 0; c < cols; c += 1) {
-        rects.push({ r, c, w: 1, h: 1, rotate: (r + c) % 2 === 0 ? 0 : 90 });
-      }
-    }
-    return rects;
-  }
-
-  if (patternType === "basketweave") {
-    for (let r = 0; r < rows; r += 2) {
-      for (let c = 0; c < cols; c += 2) {
-        rects.push({ r, c, w: 1, h: 2 });
-        if (c + 1 < cols) rects.push({ r, c: c + 1, w: 1, h: 2, rotate: 90 });
-      }
-    }
-    return rects;
-  }
-
-  if (patternType === "checker") {
-    for (let r = 0; r < rows; r += 1) {
-      for (let c = 0; c < cols; c += 1) {
-        rects.push({ r, c, w: 1, h: 1, alt: (r + c) % 2 });
-      }
-    }
-    return rects;
-  }
-
-  for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) {
-      rects.push({ r, c, w: 1, h: 1 });
-    }
-  }
-
-  return rects;
-}
-
-function renderOverlays() {
-  wall.querySelectorAll(".overlay").forEach((x) => x.remove());
-  overlayState.forEach((overlay) => {
-    const el = document.createElement("div");
-    el.className = `overlay ${overlay.shape === "ellipse" ? "ellipse" : ""}`;
-    Object.assign(el.style, {
-      left: `${overlay.x}px`,
-      top: `${overlay.y}px`,
-      width: `${overlay.width}px`,
-      height: `${overlay.height}px`
-    });
-
-    const handle = document.createElement("div");
-    handle.className = "resize-handle";
-    el.appendChild(handle);
-
-    attachOverlayDrag(el, overlay);
-    attachOverlayResize(handle, overlay);
-    wall.appendChild(el);
-  });
+function applyOverlayStyle(el, overlay) {
+  el.style.left = `${overlay.x}px`;
+  el.style.top = `${overlay.y}px`;
+  el.style.width = `${overlay.width}px`;
+  el.style.height = `${overlay.height}px`;
 }
 
 function attachOverlayDrag(el, overlay) {
   let startX = 0;
   let startY = 0;
-  let pointerDown = false;
+  let dragging = false;
 
   el.addEventListener("pointerdown", (event) => {
     if (event.target.classList.contains("resize-handle")) return;
-    pointerDown = true;
+    dragging = true;
     startX = event.clientX - overlay.x;
     startY = event.clientY - overlay.y;
     el.setPointerCapture(event.pointerId);
   });
 
   el.addEventListener("pointermove", (event) => {
-    if (!pointerDown) return;
+    if (!dragging) return;
     overlay.x = Math.max(0, Math.min(wall.clientWidth - overlay.width, event.clientX - startX));
     overlay.y = Math.max(0, Math.min(wall.clientHeight - overlay.height, event.clientY - startY));
-    renderOverlays();
+    applyOverlayStyle(el, overlay);
   });
 
   el.addEventListener("pointerup", () => {
-    pointerDown = false;
+    dragging = false;
   });
 }
 
-function attachOverlayResize(handle, overlay) {
-  let pointerDown = false;
+function attachOverlayResize(handle, host, overlay) {
+  let resizing = false;
   let startW = 0;
   let startH = 0;
-  let x = 0;
-  let y = 0;
+  let startX = 0;
+  let startY = 0;
 
   handle.addEventListener("pointerdown", (event) => {
     event.stopPropagation();
-    pointerDown = true;
+    resizing = true;
     startW = overlay.width;
     startH = overlay.height;
-    x = event.clientX;
-    y = event.clientY;
+    startX = event.clientX;
+    startY = event.clientY;
     handle.setPointerCapture(event.pointerId);
   });
 
   handle.addEventListener("pointermove", (event) => {
-    if (!pointerDown) return;
-    overlay.width = Math.max(30, Math.min(wall.clientWidth - overlay.x, startW + (event.clientX - x)));
-    overlay.height = Math.max(30, Math.min(wall.clientHeight - overlay.y, startH + (event.clientY - y)));
-    renderOverlays();
+    if (!resizing) return;
+    overlay.width = Math.max(30, Math.min(wall.clientWidth - overlay.x, startW + (event.clientX - startX)));
+    overlay.height = Math.max(30, Math.min(wall.clientHeight - overlay.y, startH + (event.clientY - startY)));
+    applyOverlayStyle(host, overlay);
   });
 
   handle.addEventListener("pointerup", () => {
-    pointerDown = false;
+    resizing = false;
+  });
+}
+
+function renderOverlays() {
+  wall.querySelectorAll(".overlay").forEach((el) => el.remove());
+  overlayState.forEach((overlay) => {
+    const el = document.createElement("div");
+    el.className = `overlay ${overlay.shape === "ellipse" ? "ellipse" : ""}`;
+    applyOverlayStyle(el, overlay);
+
+    const handle = document.createElement("div");
+    handle.className = "resize-handle";
+    el.appendChild(handle);
+
+    attachOverlayDrag(el, overlay);
+    attachOverlayResize(handle, el, overlay);
+
+    wall.appendChild(el);
   });
 }
 
@@ -265,29 +236,34 @@ function renderWall() {
   const tileWidthCm = Math.max(1, Number(controls.tileWidthCm.value));
   const tileHeightCm = Math.max(1, Number(controls.tileHeightCm.value));
   const groutSize = Number(controls.groutSize.value);
-  controls.groutSizeValue.textContent = String(groutSize);
+  const viewerScale = Number(controls.viewerScale.value) / 100;
+
+  controls.groutSizeValue.textContent = `${groutSize}px`;
+  controls.viewerScaleValue.textContent = `${controls.viewerScale.value}%`;
 
   const totalWidth = columns * tileWidthCm;
   const totalHeight = rows * tileHeightCm;
   wall.style.aspectRatio = `${totalWidth} / ${totalHeight}`;
   wall.style.background = controls.groutColor.value;
+  wall.style.width = `${Math.round(700 * viewerScale)}px`;
 
   wall.querySelectorAll(".tile").forEach((tile) => tile.remove());
 
   const tileTypes = getTileTypes();
+  const rects = buildStackRects(rows, columns);
   const patternType = controls.patternType.value;
-  const rects = buildPatternRects(rows, columns, patternType);
-  const pickedTiles = generateTileSelection(rects.length, patternType, tileTypes);
+  const randomTiles = patternType === "random" ? generateTileSelection(rects.length, tileTypes) : null;
 
   const pitchW = wall.clientWidth / columns;
   const pitchH = wall.clientHeight / rows;
 
   rects.forEach((rect, index) => {
     const tile = document.createElement("div");
-    const chosen = patternType === "checker" && rect.alt
-      ? pickedTiles[(index + 1) % pickedTiles.length]
-      : pickedTiles[index % pickedTiles.length];
+    const arrangement = patternType === "random"
+      ? { tile: randomTiles[index % randomTiles.length], rotate: [0, 90, 180, 270][index % 4] }
+      : arrangementForCell(patternType, rect.r, rect.c, tileTypes);
 
+    const chosen = arrangement.tile;
     tile.className = "tile";
     tile.style.backgroundColor = chosen.color;
     if (chosen.image) {
@@ -295,15 +271,15 @@ function renderWall() {
       tile.style.backgroundSize = "cover";
       tile.style.backgroundPosition = "center";
     }
+
     tile.title = chosen.name;
 
-    const dimensions = tileRect(rect.r, rect.c, rect.w, rect.h, pitchW, pitchH);
-    tile.style.left = `${dimensions.left + groutSize / 2}px`;
-    tile.style.top = `${dimensions.top + groutSize / 2}px`;
-    tile.style.width = `${Math.max(2, dimensions.width - groutSize)}px`;
-    tile.style.height = `${Math.max(2, dimensions.height - groutSize)}px`;
-    if (rect.rotate) {
-      tile.style.transform = `rotate(${rect.rotate}deg)`;
+    tile.style.left = `${rect.c * pitchW + groutSize / 2}px`;
+    tile.style.top = `${rect.r * pitchH + groutSize / 2}px`;
+    tile.style.width = `${Math.max(2, pitchW - groutSize)}px`;
+    tile.style.height = `${Math.max(2, pitchH - groutSize)}px`;
+    if (arrangement.rotate) {
+      tile.style.transform = `rotate(${arrangement.rotate}deg)`;
       tile.style.transformOrigin = "center";
     }
 
@@ -313,17 +289,17 @@ function renderWall() {
   renderOverlays();
 }
 
-["columns", "rows", "tileWidthCm", "tileHeightCm", "groutColor", "groutSize", "patternType"].forEach((key) => {
+["columns", "rows", "tileWidthCm", "tileHeightCm", "viewerScale", "groutColor", "groutSize", "patternType"].forEach((key) => {
   controls[key].addEventListener("input", renderWall);
 });
 
 controls.addOverlay.addEventListener("click", () => {
   overlayState.push({
     shape: controls.overlayShape.value,
-    x: 24 + (overlayState.length * 14),
-    y: 24 + (overlayState.length * 14),
-    width: 140,
-    height: 92
+    x: 20 + overlayState.length * 12,
+    y: 20 + overlayState.length * 12,
+    width: 150,
+    height: 110
   });
   renderOverlays();
 });

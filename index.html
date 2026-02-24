@@ -7,63 +7,66 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="app">
-    <section class="controls">
+  <main class="app-shell">
+    <aside class="controls-panel">
       <header class="controls-header">
-        <h1>Tile Wall Simulator</h1>
-        <p>Design a wall layout, visualize patterns, and place furniture/mirror guides.</p>
+        <h1>Tile Wall Designer</h1>
+        <p>Stack-bond square tiles with configurable arrangements, textures, grout, and overlay objects.</p>
       </header>
 
       <fieldset>
-        <legend>Wall Settings</legend>
-        <label>Columns
-          <input id="columns" type="number" min="1" value="3" />
-        </label>
-        <label>Rows
-          <input id="rows" type="number" min="1" value="13" />
-        </label>
-        <label>Tile Width (cm)
-          <input id="tileWidthCm" type="number" min="1" value="20" />
-        </label>
-        <label>Tile Height (cm)
-          <input id="tileHeightCm" type="number" min="1" value="20" />
+        <legend>Wall</legend>
+        <div class="control-grid two-col">
+          <label class="control-row"><span>Columns</span><input id="columns" type="number" min="1" value="3" /></label>
+          <label class="control-row"><span>Rows</span><input id="rows" type="number" min="1" value="13" /></label>
+          <label class="control-row"><span>Tile Width (cm)</span><input id="tileWidthCm" type="number" min="1" value="20" /></label>
+          <label class="control-row"><span>Tile Height (cm)</span><input id="tileHeightCm" type="number" min="1" value="20" /></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Viewer</legend>
+        <label class="control-row"><span>Scale</span>
+          <div class="inline-range">
+            <input id="viewerScale" type="range" min="50" max="175" value="100" />
+            <strong id="viewerScaleValue">100%</strong>
+          </div>
         </label>
       </fieldset>
 
       <fieldset>
         <legend>Grout</legend>
-        <label>Grout Color
-          <input id="groutColor" type="color" value="#d5d5d5" />
-        </label>
-        <label>Grout Size (px)
-          <input id="groutSize" type="range" min="0" max="16" value="3" />
-          <span id="groutSizeValue">3</span>
+        <label class="control-row"><span>Color</span><input id="groutColor" type="color" value="#d5d5d5" /></label>
+        <label class="control-row"><span>Size</span>
+          <div class="inline-range">
+            <input id="groutSize" type="range" min="0" max="16" value="3" />
+            <strong id="groutSizeValue">3px</strong>
+          </div>
         </label>
       </fieldset>
 
       <fieldset>
-        <legend>Pattern</legend>
-        <label>Pattern Type
+        <legend>Arrangement (Stack Bond)</legend>
+        <label class="control-row"><span>Arrangement</span>
           <select id="patternType">
-            <option value="stack">Stack Bond</option>
-            <option value="brick">Brick Bond</option>
-            <option value="herringbone">Herringbone</option>
-            <option value="basketweave">Basketweave</option>
-            <option value="checker">Checkerboard</option>
+            <option value="aligned">Aligned</option>
+            <option value="checker">Checker Mix</option>
+            <option value="diagonal">Diagonal Flow</option>
+            <option value="pinwheel">Pinwheel Rotation</option>
             <option value="random">Random by Inventory (±10)</option>
           </select>
         </label>
       </fieldset>
 
       <fieldset>
-        <legend>Tile Patterns / Packs</legend>
+        <legend>Tile Types / Packs</legend>
         <div id="tileTypes" class="tile-types"></div>
       </fieldset>
 
       <fieldset>
         <legend>Overlay Objects</legend>
         <div class="overlay-row">
-          <label>Shape
+          <label class="control-row compact"><span>Shape</span>
             <select id="overlayShape">
               <option value="rectangle">Rectangle</option>
               <option value="ellipse">Ellipse</option>
@@ -71,42 +74,32 @@
           </label>
           <button id="addOverlay" type="button">Add Object</button>
         </div>
-        <p class="hint">Drag objects on the wall and resize using the corner handle.</p>
+        <p class="hint">Objects can be dragged and resized with the corner handle.</p>
       </fieldset>
-    </section>
+    </aside>
 
-    <section class="preview">
+    <section class="viewer-panel">
       <div id="wall" aria-label="Tile wall preview"></div>
     </section>
   </main>
 
   <template id="tileTypeTemplate">
-    <div class="tile-type-row">
-      <div class="tile-type-grid">
-        <label>Name
-          <input class="tile-name" type="text" />
-        </label>
-        <label>Color
-          <input class="tile-color" type="color" />
-        </label>
-        <label>Pack Count
-          <input class="tile-pack" type="number" min="0" value="1" />
-        </label>
-        <label>Tiles/Pack
-          <input class="tiles-per-pack" type="number" min="1" value="10" />
-        </label>
+    <article class="tile-type-row">
+      <div class="tile-top-row">
+        <label class="control-row compact"><span>Name</span><input class="tile-name" type="text" /></label>
+        <label class="control-row compact"><span>Color</span><input class="tile-color" type="color" /></label>
+      </div>
+      <div class="tile-top-row">
+        <label class="control-row compact"><span>Pack Count</span><input class="tile-pack" type="number" min="0" value="1" /></label>
+        <label class="control-row compact"><span>Tiles / Pack</span><input class="tiles-per-pack" type="number" min="1" value="10" /></label>
       </div>
       <div class="tile-image-controls">
         <div class="tile-thumb" aria-hidden="true"></div>
-        <label>Image URL
-          <input class="tile-image-url" type="url" placeholder="https://..." />
-        </label>
-        <label class="tile-image-upload-label">Upload Image
-          <input class="tile-image-file" type="file" accept="image/*" />
-        </label>
+        <label class="control-row compact"><span>Image URL</span><input class="tile-image-url" type="url" placeholder="https://..." /></label>
+        <label class="control-row compact"><span>Upload</span><input class="tile-image-file" type="file" accept="image/*" /></label>
         <button class="clear-image" type="button">Clear Image</button>
       </div>
-    </div>
+    </article>
   </template>
 
   <script src="app.js"></script>
