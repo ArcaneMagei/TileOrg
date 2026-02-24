@@ -1,3 +1,5 @@
+const STORAGE_KEY = "tile-wall-simulator-state-v2";
+
 const defaultTileTypes = [
   { name: "Carrara", color: "#efeae2", packs: 4, perPack: 12, image: "" },
   { name: "Slate", color: "#7e838d", packs: 4, perPack: 10, image: "" },
@@ -29,6 +31,7 @@ const controls = {
 const wall = document.getElementById("wall");
 const tileTemplate = document.getElementById("tileTypeTemplate");
 const overlayState = [];
+let isHydrating = false;
 
 function ensureNineModels() {
   while (defaultTileTypes.length < 9) {
@@ -53,6 +56,82 @@ function updateTileThumb(row) {
   thumb.classList.toggle("has-image", Boolean(image));
 }
 
+function getTileTypes() {
+  const rows = controls.tileTypes.querySelectorAll(".tile-type-row");
+  return [...rows].map((row, index) => ({
+    id: index,
+    name: row.querySelector(".tile-name").value || `Tile ${index + 1}`,
+    color: row.querySelector(".tile-color").value,
+    image: row.dataset.image || row.querySelector(".tile-image-url").value.trim(),
+    total: Number(row.querySelector(".tile-pack").value || 0) * Number(row.querySelector(".tiles-per-pack").value || 0)
+  }));
+}
+
+function persistState() {
+  if (isHydrating) return;
+  const payload = {
+    controls: {
+      columns: controls.columns.value,
+      rows: controls.rows.value,
+      tileWidthCm: controls.tileWidthCm.value,
+      tileHeightCm: controls.tileHeightCm.value,
+      viewerScale: controls.viewerScale.value,
+      groutColor: controls.groutColor.value,
+      groutSize: controls.groutSize.value,
+      patternType: controls.patternType.value
+    },
+    tileTypes: getTileTypes().map((x) => ({
+      name: x.name,
+      color: x.color,
+      total: x.total,
+      image: x.image,
+      packs: Number(controls.tileTypes.querySelectorAll(".tile-pack")[x.id].value || 0),
+      perPack: Number(controls.tileTypes.querySelectorAll(".tiles-per-pack")[x.id].value || 0)
+    })),
+    overlays: overlayState
+  };
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+}
+
+function hydrateState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return;
+
+  try {
+    const saved = JSON.parse(raw);
+    isHydrating = true;
+
+    if (saved.controls) {
+      Object.entries(saved.controls).forEach(([key, value]) => {
+        if (controls[key] && value != null) controls[key].value = value;
+      });
+    }
+
+    if (Array.isArray(saved.tileTypes)) {
+      saved.tileTypes.slice(0, 9).forEach((tile, i) => {
+        if (!defaultTileTypes[i]) return;
+        defaultTileTypes[i] = {
+          name: tile.name || defaultTileTypes[i].name,
+          color: tile.color || defaultTileTypes[i].color,
+          packs: Number.isFinite(tile.packs) ? tile.packs : defaultTileTypes[i].packs,
+          perPack: Number.isFinite(tile.perPack) ? tile.perPack : defaultTileTypes[i].perPack,
+          image: tile.image || ""
+        };
+      });
+    }
+
+    if (Array.isArray(saved.overlays)) {
+      overlayState.length = 0;
+      saved.overlays.forEach((o) => overlayState.push(o));
+    }
+  } catch {
+    localStorage.removeItem(STORAGE_KEY);
+  } finally {
+    isHydrating = false;
+  }
+}
+
 function buildTileTypeControls() {
   controls.tileTypes.textContent = "";
   ensureNineModels();
@@ -71,6 +150,7 @@ function buildTileTypeControls() {
     const imageUrl = row.querySelector(".tile-image-url");
     const imageFile = row.querySelector(".tile-image-file");
     const clearImage = row.querySelector(".clear-image");
+    imageUrl.value = tile.image && tile.image.startsWith("http") ? tile.image : "";
 
     row.querySelectorAll("input:not(.tile-image-file)").forEach((input) => {
       input.addEventListener("input", () => {
@@ -78,6 +158,7 @@ function buildTileTypeControls() {
           row.dataset.image = input.value.trim();
           updateTileThumb(row);
         }
+        persistState();
         renderWall();
       });
     });
@@ -89,6 +170,7 @@ function buildTileTypeControls() {
       row.dataset.image = dataUrl;
       imageUrl.value = "";
       updateTileThumb(row);
+      persistState();
       renderWall();
     });
 
@@ -97,23 +179,13 @@ function buildTileTypeControls() {
       imageUrl.value = "";
       imageFile.value = "";
       updateTileThumb(row);
+      persistState();
       renderWall();
     });
 
     updateTileThumb(row);
     controls.tileTypes.appendChild(fragment);
   });
-}
-
-function getTileTypes() {
-  const rows = controls.tileTypes.querySelectorAll(".tile-type-row");
-  return [...rows].map((row, index) => ({
-    id: index,
-    name: row.querySelector(".tile-name").value || `Tile ${index + 1}`,
-    color: row.querySelector(".tile-color").value,
-    image: row.dataset.image || row.querySelector(".tile-image-url").value.trim(),
-    total: Number(row.querySelector(".tile-pack").value || 0) * Number(row.querySelector(".tiles-per-pack").value || 0)
-  }));
 }
 
 function buildStackRects(rows, cols) {
@@ -132,7 +204,6 @@ function generateTileSelection(totalTiles, tileTypes) {
   });
 
   if (!pool.length) return Array.from({ length: totalTiles }, () => tileTypes[0]);
-
   for (let i = pool.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
@@ -152,17 +223,7 @@ function arrangementForCell(patternType, row, col, tileTypes) {
     pinwheel: (Math.floor(row / 2) + Math.floor(col / 2)) % totalTypes
   };
 
-  const rotateBy = {
-    aligned: 0,
-    checker: (row + col) % 2 === 0 ? 0 : 90,
-    diagonal: ((row + col) % 4) * 90,
-    pinwheel: (row % 2) * 180 + (col % 2) * 90
-  };
-
-  return {
-    tile: tileTypes[indexBy[patternType] ?? 0],
-    rotate: rotateBy[patternType] ?? 0
-  };
+  return { tile: tileTypes[indexBy[patternType] ?? 0] };
 }
 
 function applyOverlayStyle(el, overlay) {
@@ -178,7 +239,7 @@ function attachOverlayDrag(el, overlay) {
   let dragging = false;
 
   el.addEventListener("pointerdown", (event) => {
-    if (event.target.classList.contains("resize-handle")) return;
+    if (event.target.classList.contains("resize-handle") || event.target.classList.contains("overlay-delete")) return;
     dragging = true;
     startX = event.clientX - overlay.x;
     startY = event.clientY - overlay.y;
@@ -192,7 +253,10 @@ function attachOverlayDrag(el, overlay) {
     applyOverlayStyle(el, overlay);
   });
 
-  el.addEventListener("pointerup", () => { dragging = false; });
+  el.addEventListener("pointerup", () => {
+    if (dragging) persistState();
+    dragging = false;
+  });
 }
 
 function attachOverlayResize(handle, host, overlay) {
@@ -219,20 +283,33 @@ function attachOverlayResize(handle, host, overlay) {
     applyOverlayStyle(host, overlay);
   });
 
-  handle.addEventListener("pointerup", () => { resizing = false; });
+  handle.addEventListener("pointerup", () => {
+    if (resizing) persistState();
+    resizing = false;
+  });
 }
 
 function renderOverlays() {
   wall.querySelectorAll(".overlay").forEach((el) => el.remove());
-  overlayState.forEach((overlay) => {
+  overlayState.forEach((overlay, index) => {
     const el = document.createElement("div");
     el.className = `overlay ${overlay.shape === "ellipse" ? "ellipse" : ""}`;
     applyOverlayStyle(el, overlay);
 
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "overlay-delete";
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "×";
+    deleteBtn.addEventListener("click", () => {
+      overlayState.splice(index, 1);
+      persistState();
+      renderOverlays();
+    });
+
     const handle = document.createElement("div");
     handle.className = "resize-handle";
-    el.appendChild(handle);
 
+    el.append(deleteBtn, handle);
     attachOverlayDrag(el, overlay);
     attachOverlayResize(handle, el, overlay);
     wall.appendChild(el);
@@ -250,12 +327,10 @@ function renderWall() {
   controls.groutSizeValue.textContent = `${groutSize}px`;
   controls.viewerScaleValue.textContent = `${controls.viewerScale.value}%`;
 
-  const totalWidthCm = columns * tileWidthCm;
-  const totalHeightCm = rows * tileHeightCm;
-
-  const pxPerCm = 3.6 * viewerScale;
-  const wallWidthPx = Math.max(220, totalWidthCm * pxPerCm);
-  const wallHeightPx = Math.max(220, totalHeightCm * pxPerCm);
+  const tilePxW = Math.max(8, Math.round(tileWidthCm * 3.6 * viewerScale));
+  const tilePxH = Math.max(8, Math.round(tileHeightCm * 3.6 * viewerScale));
+  const wallWidthPx = columns * tilePxW;
+  const wallHeightPx = rows * tilePxH;
 
   wall.style.background = controls.groutColor.value;
   wall.style.width = `${wallWidthPx}px`;
@@ -268,13 +343,10 @@ function renderWall() {
   const patternType = controls.patternType.value;
   const randomTiles = patternType === "random" ? generateTileSelection(rects.length, tileTypes) : null;
 
-  const pitchW = wallWidthPx / columns;
-  const pitchH = wallHeightPx / rows;
-
   rects.forEach((rect, index) => {
     const tile = document.createElement("div");
     const arrangement = patternType === "random"
-      ? { tile: randomTiles[index % randomTiles.length], rotate: [0, 90, 180, 270][index % 4] }
+      ? { tile: randomTiles[index % randomTiles.length] }
       : arrangementForCell(patternType, rect.r, rect.c, tileTypes);
 
     tile.className = "tile";
@@ -287,15 +359,10 @@ function renderWall() {
     }
 
     tile.title = arrangement.tile.name;
-    tile.style.left = `${rect.c * pitchW + groutSize / 2}px`;
-    tile.style.top = `${rect.r * pitchH + groutSize / 2}px`;
-    tile.style.width = `${Math.max(2, pitchW - groutSize)}px`;
-    tile.style.height = `${Math.max(2, pitchH - groutSize)}px`;
-
-    if (arrangement.rotate) {
-      tile.style.transform = `rotate(${arrangement.rotate}deg)`;
-      tile.style.transformOrigin = "center";
-    }
+    tile.style.left = `${rect.c * tilePxW + groutSize / 2}px`;
+    tile.style.top = `${rect.r * tilePxH + groutSize / 2}px`;
+    tile.style.width = `${Math.max(2, tilePxW - groutSize)}px`;
+    tile.style.height = `${Math.max(2, tilePxH - groutSize)}px`;
 
     wall.appendChild(tile);
   });
@@ -304,7 +371,10 @@ function renderWall() {
 }
 
 ["columns", "rows", "tileWidthCm", "tileHeightCm", "viewerScale", "groutColor", "groutSize", "patternType"].forEach((key) => {
-  controls[key].addEventListener("input", renderWall);
+  controls[key].addEventListener("input", () => {
+    persistState();
+    renderWall();
+  });
 });
 
 controls.addOverlay.addEventListener("click", () => {
@@ -315,10 +385,12 @@ controls.addOverlay.addEventListener("click", () => {
     width: 150,
     height: 110
   });
+  persistState();
   renderOverlays();
 });
 
 window.addEventListener("resize", renderWall);
 
+hydrateState();
 buildTileTypeControls();
 renderWall();

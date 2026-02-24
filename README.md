@@ -21,7 +21,8 @@ python -m http.server 4173
 - Nine tile models shown in an organized palette grid, each with controls for name, color, pack count, and tiles per pack.
 - Organized texture picker per tile model with preview, URL input, upload button, and clear action.
 - Viewer scale control that resizes both width and height of the wall preview together.
-- Overlay objects (rectangle/ellipse) that can be moved and resized.
+- Overlay objects (rectangle/ellipse) that can be moved, resized, and deleted.
+- Selected tile images and key settings are remembered between updates/reloads on the same browser.
 
 ## Notes
 
