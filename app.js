@@ -1,9 +1,9 @@
 const defaultTileTypes = [
-  { name: "Carrara", color: "#efeae2", packs: 4, perPack: 12 },
-  { name: "Slate", color: "#7e838d", packs: 4, perPack: 10 },
-  { name: "Terracotta", color: "#c87852", packs: 4, perPack: 9 },
-  { name: "Sea Glass", color: "#79c7ba", packs: 4, perPack: 8 },
-  { name: "Sand", color: "#dcc69d", packs: 4, perPack: 11 }
+  { name: "Carrara", color: "#efeae2", packs: 4, perPack: 12, image: "" },
+  { name: "Slate", color: "#7e838d", packs: 4, perPack: 10, image: "" },
+  { name: "Terracotta", color: "#c87852", packs: 4, perPack: 9, image: "" },
+  { name: "Sea Glass", color: "#79c7ba", packs: 4, perPack: 8, image: "" },
+  { name: "Sand", color: "#dcc69d", packs: 4, perPack: 11, image: "" }
 ];
 
 const controls = {
@@ -24,20 +24,68 @@ const wall = document.getElementById("wall");
 const tileTemplate = document.getElementById("tileTypeTemplate");
 const overlayState = [];
 
+function updateTileThumb(row) {
+  const thumb = row.querySelector(".tile-thumb");
+  const image = row.dataset.image || "";
+  thumb.style.backgroundImage = image ? `url(${image})` : "none";
+  thumb.classList.toggle("has-image", Boolean(image));
+}
+
 function buildTileTypeControls() {
   defaultTileTypes.forEach((tile, index) => {
     const fragment = tileTemplate.content.cloneNode(true);
-    fragment.querySelector(".tile-name").value = tile.name;
-    fragment.querySelector(".tile-color").value = tile.color;
-    fragment.querySelector(".tile-pack").value = tile.packs;
-    fragment.querySelector(".tiles-per-pack").value = tile.perPack;
+    const row = fragment.querySelector(".tile-type-row");
+    row.dataset.image = tile.image || "";
 
-    fragment.querySelectorAll("input").forEach((input) => {
+    row.querySelector(".tile-name").value = tile.name;
+    row.querySelector(".tile-color").value = tile.color;
+    row.querySelector(".tile-pack").value = tile.packs;
+    row.querySelector(".tiles-per-pack").value = tile.perPack;
+
+    const imageUrl = row.querySelector(".tile-image-url");
+    const imageFile = row.querySelector(".tile-image-file");
+    const clearImage = row.querySelector(".clear-image");
+
+    row.querySelectorAll("input:not(.tile-image-file)").forEach((input) => {
       input.dataset.index = index;
-      input.addEventListener("input", renderWall);
+      input.addEventListener("input", () => {
+        if (input.classList.contains("tile-image-url")) {
+          row.dataset.image = input.value.trim();
+          updateTileThumb(row);
+        }
+        renderWall();
+      });
     });
 
+    imageFile.addEventListener("change", async () => {
+      const [file] = imageFile.files || [];
+      if (!file) return;
+      const dataUrl = await fileToDataURL(file);
+      row.dataset.image = dataUrl;
+      imageUrl.value = "";
+      updateTileThumb(row);
+      renderWall();
+    });
+
+    clearImage.addEventListener("click", () => {
+      row.dataset.image = "";
+      imageUrl.value = "";
+      imageFile.value = "";
+      updateTileThumb(row);
+      renderWall();
+    });
+
+    updateTileThumb(row);
     controls.tileTypes.appendChild(fragment);
+  });
+}
+
+function fileToDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -47,6 +95,7 @@ function getTileTypes() {
     id: index,
     name: row.querySelector(".tile-name").value || `Tile ${index + 1}`,
     color: row.querySelector(".tile-color").value,
+    image: row.dataset.image || row.querySelector(".tile-image-url").value.trim(),
     total: Number(row.querySelector(".tile-pack").value || 0) * Number(row.querySelector(".tiles-per-pack").value || 0)
   }));
 }
@@ -100,8 +149,7 @@ function buildPatternRects(rows, cols, patternType) {
   if (patternType === "herringbone") {
     for (let r = 0; r < rows; r += 1) {
       for (let c = 0; c < cols; c += 1) {
-        if ((r + c) % 2 === 0) rects.push({ r, c, w: 1, h: 1 });
-        else rects.push({ r, c, w: 1, h: 1, rotate: 90 });
+        rects.push({ r, c, w: 1, h: 1, rotate: (r + c) % 2 === 0 ? 0 : 90 });
       }
     }
     return rects;
@@ -241,7 +289,12 @@ function renderWall() {
       : pickedTiles[index % pickedTiles.length];
 
     tile.className = "tile";
-    tile.style.background = chosen.color;
+    tile.style.backgroundColor = chosen.color;
+    if (chosen.image) {
+      tile.style.backgroundImage = `url(${chosen.image})`;
+      tile.style.backgroundSize = "cover";
+      tile.style.backgroundPosition = "center";
+    }
     tile.title = chosen.name;
 
     const dimensions = tileRect(rect.r, rect.c, rect.w, rect.h, pitchW, pitchH);
@@ -267,10 +320,10 @@ function renderWall() {
 controls.addOverlay.addEventListener("click", () => {
   overlayState.push({
     shape: controls.overlayShape.value,
-    x: 20 + (overlayState.length * 16),
-    y: 20 + (overlayState.length * 16),
-    width: 120,
-    height: 80
+    x: 24 + (overlayState.length * 14),
+    y: 24 + (overlayState.length * 14),
+    width: 140,
+    height: 92
   });
   renderOverlays();
 });

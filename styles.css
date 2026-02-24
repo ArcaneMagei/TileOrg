@@ -1,6 +1,12 @@
 :root {
   color-scheme: light;
-  font-family: Inter, system-ui, sans-serif;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  --bg: #eef2ff;
+  --card: #ffffff;
+  --line: #d8deef;
+  --text: #1e2540;
+  --muted: #66708f;
+  --accent: #546dff;
 }
 
 * {
@@ -9,40 +15,53 @@
 
 body {
   margin: 0;
-  background: #f4f5f8;
+  color: var(--text);
+  background:
+    radial-gradient(circle at 0% 0%, #f8f9ff, transparent 35%),
+    radial-gradient(circle at 100% 100%, #e9f0ff, transparent 25%),
+    var(--bg);
 }
 
 .app {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) 1fr;
+  grid-template-columns: minmax(320px, 430px) 1fr;
   gap: 1rem;
   min-height: 100vh;
   padding: 1rem;
 }
 
 .controls {
-  background: white;
-  border-radius: 10px;
+  background: color-mix(in srgb, var(--card) 95%, #eef1ff);
+  border: 1px solid var(--line);
+  border-radius: 16px;
   padding: 1rem;
   overflow-y: auto;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 14px 30px rgba(33, 47, 101, 0.1);
 }
 
-h1 {
-  margin: 0 0 1rem;
-  font-size: 1.3rem;
+.controls-header h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.controls-header p {
+  margin: 0.35rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 fieldset {
-  border: 1px solid #d7d7df;
-  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   margin: 0 0 1rem;
-  padding: 0.75rem;
+  padding: 0.8rem;
+  background: rgba(255, 255, 255, 0.6);
 }
 
 legend {
-  padding: 0 0.25rem;
-  font-weight: 600;
+  padding: 0 0.35rem;
+  font-weight: 700;
+  color: #33407a;
 }
 
 label {
@@ -50,26 +69,92 @@ label {
   grid-template-columns: 1fr auto;
   gap: 0.5rem;
   align-items: center;
-  margin-bottom: 0.55rem;
-  font-size: 0.92rem;
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
 }
 
 input[type="number"],
 input[type="text"],
+input[type="url"],
+select,
+button {
+  border: 1px solid #c7d0ec;
+  border-radius: 9px;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+}
+
+input[type="number"],
+input[type="text"],
+input[type="url"],
 select {
-  width: 120px;
+  width: 140px;
+  background: #fff;
+}
+
+button {
+  cursor: pointer;
+  background: #f7f9ff;
+  color: #243066;
+  font-weight: 600;
+}
+
+button:hover {
+  background: #eef2ff;
 }
 
 .tile-types {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.65rem;
 }
 
 .tile-type-row {
-  border: 1px solid #ececf3;
-  border-radius: 6px;
-  padding: 0.45rem;
-  background: #fafafe;
+  border: 1px solid #d8e0f5;
+  border-radius: 12px;
+  padding: 0.65rem;
+  background: linear-gradient(145deg, #fcfcff, #f4f7ff);
+}
+
+.tile-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.7rem;
+}
+
+.tile-image-controls {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  gap: 0.45rem 0.7rem;
+  align-items: center;
+  margin-top: 0.4rem;
+}
+
+.tile-image-controls label {
+  margin: 0;
+}
+
+.tile-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 9px;
+  border: 1px dashed #9fb0e4;
+  background: repeating-conic-gradient(#eef2ff 0% 25%, #f9fbff 0% 50%) 0 / 10px 10px;
+  grid-row: span 2;
+}
+
+.tile-thumb.has-image {
+  border-style: solid;
+  background-size: cover;
+  background-position: center;
+}
+
+.tile-image-upload-label input {
+  width: 100%;
+}
+
+.clear-image {
+  grid-column: 2;
+  width: fit-content;
 }
 
 .overlay-row {
@@ -80,34 +165,37 @@ select {
 
 .hint {
   margin: 0.5rem 0 0;
-  font-size: 0.8rem;
-  color: #666;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
 .preview {
   display: grid;
   place-items: center;
+  padding: 0.5rem;
 }
 
 #wall {
   position: relative;
-  border: 1px solid #8f93a8;
+  border: 1px solid #9aa6cf;
+  border-radius: 14px;
   background: #ddd;
-  width: min(72vw, 900px);
+  width: min(72vw, 980px);
   max-height: 88vh;
-  height: auto;
   overflow: hidden;
+  box-shadow: 0 22px 36px rgba(35, 53, 117, 0.2);
 }
 
 .tile {
   position: absolute;
-  border-radius: 1px;
+  border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 .overlay {
   position: absolute;
-  border: 2px dashed #1d4ed8;
-  background: color-mix(in srgb, #1d4ed8 13%, transparent);
+  border: 2px dashed #3557ec;
+  background: color-mix(in srgb, #3d5aee 15%, transparent);
   cursor: move;
   min-width: 30px;
   min-height: 30px;
@@ -123,18 +211,18 @@ select {
   height: 12px;
   right: -6px;
   bottom: -6px;
-  background: #1d4ed8;
+  background: #3557ec;
   border-radius: 3px;
   cursor: nwse-resize;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1050px) {
   .app {
     grid-template-columns: 1fr;
   }
 
   #wall {
-    width: 94vw;
+    width: 95vw;
     max-height: 70vh;
   }
 }

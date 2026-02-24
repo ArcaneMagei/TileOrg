@@ -9,7 +9,10 @@
 <body>
   <main class="app">
     <section class="controls">
-      <h1>Tile Wall Simulator</h1>
+      <header class="controls-header">
+        <h1>Tile Wall Simulator</h1>
+        <p>Design a wall layout, visualize patterns, and place furniture/mirror guides.</p>
+      </header>
 
       <fieldset>
         <legend>Wall Settings</legend>
@@ -79,18 +82,30 @@
 
   <template id="tileTypeTemplate">
     <div class="tile-type-row">
-      <label>Name
-        <input class="tile-name" type="text" />
-      </label>
-      <label>Color
-        <input class="tile-color" type="color" />
-      </label>
-      <label>Pack Count
-        <input class="tile-pack" type="number" min="0" value="1" />
-      </label>
-      <label>Tiles/Pack
-        <input class="tiles-per-pack" type="number" min="1" value="10" />
-      </label>
+      <div class="tile-type-grid">
+        <label>Name
+          <input class="tile-name" type="text" />
+        </label>
+        <label>Color
+          <input class="tile-color" type="color" />
+        </label>
+        <label>Pack Count
+          <input class="tile-pack" type="number" min="0" value="1" />
+        </label>
+        <label>Tiles/Pack
+          <input class="tiles-per-pack" type="number" min="1" value="10" />
+        </label>
+      </div>
+      <div class="tile-image-controls">
+        <div class="tile-thumb" aria-hidden="true"></div>
+        <label>Image URL
+          <input class="tile-image-url" type="url" placeholder="https://..." />
+        </label>
+        <label class="tile-image-upload-label">Upload Image
+          <input class="tile-image-file" type="file" accept="image/*" />
+        </label>
+        <button class="clear-image" type="button">Clear Image</button>
+      </div>
     </div>
   </template>
 
