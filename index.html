@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tile Wall Simulator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app">
+    <section class="controls">
+      <h1>Tile Wall Simulator</h1>
+
+      <fieldset>
+        <legend>Wall Settings</legend>
+        <label>Columns
+          <input id="columns" type="number" min="1" value="3" />
+        </label>
+        <label>Rows
+          <input id="rows" type="number" min="1" value="13" />
+        </label>
+        <label>Tile Width (cm)
+          <input id="tileWidthCm" type="number" min="1" value="20" />
+        </label>
+        <label>Tile Height (cm)
+          <input id="tileHeightCm" type="number" min="1" value="20" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Grout</legend>
+        <label>Grout Color
+          <input id="groutColor" type="color" value="#d5d5d5" />
+        </label>
+        <label>Grout Size (px)
+          <input id="groutSize" type="range" min="0" max="16" value="3" />
+          <span id="groutSizeValue">3</span>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Pattern</legend>
+        <label>Pattern Type
+          <select id="patternType">
+            <option value="stack">Stack Bond</option>
+            <option value="brick">Brick Bond</option>
+            <option value="herringbone">Herringbone</option>
+            <option value="basketweave">Basketweave</option>
+            <option value="checker">Checkerboard</option>
+            <option value="random">Random by Inventory (±10)</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Tile Patterns / Packs</legend>
+        <div id="tileTypes" class="tile-types"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Overlay Objects</legend>
+        <div class="overlay-row">
+          <label>Shape
+            <select id="overlayShape">
+              <option value="rectangle">Rectangle</option>
+              <option value="ellipse">Ellipse</option>
+            </select>
+          </label>
+          <button id="addOverlay" type="button">Add Object</button>
+        </div>
+        <p class="hint">Drag objects on the wall and resize using the corner handle.</p>
+      </fieldset>
+    </section>
+
+    <section class="preview">
+      <div id="wall" aria-label="Tile wall preview"></div>
+    </section>
+  </main>
+
+  <template id="tileTypeTemplate">
+    <div class="tile-type-row">
+      <label>Name
+        <input class="tile-name" type="text" />
+      </label>
+      <label>Color
+        <input class="tile-color" type="color" />
+      </label>
+      <label>Pack Count
+        <input class="tile-pack" type="number" min="0" value="1" />
+      </label>
+      <label>Tiles/Pack
+        <input class="tiles-per-pack" type="number" min="1" value="10" />
+      </label>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>
