@@ -1,4 +1,4 @@
-const STORAGE_KEY = "tile-wall-simulator-state-v2";
+const STORAGE_KEY = "tile-wall-simulator-state-v3";
 
 const defaultTileTypes = [
   { name: "Carrara", color: "#efeae2", packs: 4, perPack: 12, image: "" },
@@ -20,7 +20,7 @@ const controls = {
   viewerScale: document.getElementById("viewerScale"),
   viewerScaleValue: document.getElementById("viewerScaleValue"),
   groutColor: document.getElementById("groutColor"),
-  groutSize: document.getElementById("groutSize"),
+  groutSizeMm: document.getElementById("groutSizeMm"),
   groutSizeValue: document.getElementById("groutSizeValue"),
   patternType: document.getElementById("patternType"),
   tileTypes: document.getElementById("tileTypes"),
@@ -31,14 +31,7 @@ const controls = {
 const wall = document.getElementById("wall");
 const tileTemplate = document.getElementById("tileTypeTemplate");
 const overlayState = [];
-let isHydrating = false;
-
-function ensureNineModels() {
-  while (defaultTileTypes.length < 9) {
-    const i = defaultTileTypes.length + 1;
-    defaultTileTypes.push({ name: `Tile ${i}`, color: "#cccccc", packs: 2, perPack: 10, image: "" });
-  }
-}
+let hydrating = false;
 
 function fileToDataURL(file) {
   return new Promise((resolve, reject) => {
@@ -49,26 +42,17 @@ function fileToDataURL(file) {
   });
 }
 
-function updateTileThumb(row) {
-  const thumb = row.querySelector(".tile-thumb");
-  const image = row.dataset.image || "";
-  thumb.style.backgroundImage = image ? `url(${image})` : "none";
-  thumb.classList.toggle("has-image", Boolean(image));
-}
-
-function getTileTypes() {
-  const rows = controls.tileTypes.querySelectorAll(".tile-type-row");
-  return [...rows].map((row, index) => ({
-    id: index,
-    name: row.querySelector(".tile-name").value || `Tile ${index + 1}`,
+function saveState() {
+  if (hydrating) return;
+  const tileRows = [...controls.tileTypes.querySelectorAll(".tile-type-row")];
+  const tileTypes = tileRows.map((row) => ({
+    name: row.querySelector(".tile-name").value,
     color: row.querySelector(".tile-color").value,
-    image: row.dataset.image || row.querySelector(".tile-image-url").value.trim(),
-    total: Number(row.querySelector(".tile-pack").value || 0) * Number(row.querySelector(".tiles-per-pack").value || 0)
+    packs: Number(row.querySelector(".tile-pack").value || 0),
+    perPack: Number(row.querySelector(".tiles-per-pack").value || 0),
+    image: row.dataset.image || ""
   }));
-}
 
-function persistState() {
-  if (isHydrating) return;
   const payload = {
     controls: {
       columns: controls.columns.value,
@@ -77,34 +61,26 @@ function persistState() {
       tileHeightCm: controls.tileHeightCm.value,
       viewerScale: controls.viewerScale.value,
       groutColor: controls.groutColor.value,
-      groutSize: controls.groutSize.value,
+      groutSizeMm: controls.groutSizeMm.value,
       patternType: controls.patternType.value
     },
-    tileTypes: getTileTypes().map((x) => ({
-      name: x.name,
-      color: x.color,
-      total: x.total,
-      image: x.image,
-      packs: Number(controls.tileTypes.querySelectorAll(".tile-pack")[x.id].value || 0),
-      perPack: Number(controls.tileTypes.querySelectorAll(".tiles-per-pack")[x.id].value || 0)
-    })),
+    tileTypes,
     overlays: overlayState
   };
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
 }
 
-function hydrateState() {
+function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return;
-
   try {
+    hydrating = true;
     const saved = JSON.parse(raw);
-    isHydrating = true;
 
     if (saved.controls) {
-      Object.entries(saved.controls).forEach(([key, value]) => {
-        if (controls[key] && value != null) controls[key].value = value;
+      Object.entries(saved.controls).forEach(([k, v]) => {
+        if (controls[k] && v != null) controls[k].value = v;
       });
     }
 
@@ -128,37 +104,36 @@ function hydrateState() {
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   } finally {
-    isHydrating = false;
+    hydrating = false;
   }
 }
 
 function buildTileTypeControls() {
   controls.tileTypes.textContent = "";
-  ensureNineModels();
 
-  defaultTileTypes.forEach((tile, index) => {
+  defaultTileTypes.slice(0, 9).forEach((tile, index) => {
     const fragment = tileTemplate.content.cloneNode(true);
     const row = fragment.querySelector(".tile-type-row");
-    row.dataset.image = tile.image || "";
     row.querySelector(".tile-model-id").textContent = `Model ${index + 1}`;
+    row.dataset.image = tile.image || "";
 
     row.querySelector(".tile-name").value = tile.name;
     row.querySelector(".tile-color").value = tile.color;
     row.querySelector(".tile-pack").value = tile.packs;
     row.querySelector(".tiles-per-pack").value = tile.perPack;
 
-    const imageUrl = row.querySelector(".tile-image-url");
     const imageFile = row.querySelector(".tile-image-file");
     const clearImage = row.querySelector(".clear-image");
-    imageUrl.value = tile.image && tile.image.startsWith("http") ? tile.image : "";
+    const thumb = row.querySelector(".tile-thumb");
+
+    const paintThumb = () => {
+      thumb.style.backgroundImage = row.dataset.image ? `url(${row.dataset.image})` : "none";
+      thumb.classList.toggle("has-image", Boolean(row.dataset.image));
+    };
 
     row.querySelectorAll("input:not(.tile-image-file)").forEach((input) => {
       input.addEventListener("input", () => {
-        if (input.classList.contains("tile-image-url")) {
-          row.dataset.image = input.value.trim();
-          updateTileThumb(row);
-        }
-        persistState();
+        saveState();
         renderWall();
       });
     });
@@ -166,64 +141,106 @@ function buildTileTypeControls() {
     imageFile.addEventListener("change", async () => {
       const [file] = imageFile.files || [];
       if (!file) return;
-      const dataUrl = await fileToDataURL(file);
-      row.dataset.image = dataUrl;
-      imageUrl.value = "";
-      updateTileThumb(row);
-      persistState();
+      row.dataset.image = await fileToDataURL(file);
+      paintThumb();
+      saveState();
       renderWall();
     });
 
     clearImage.addEventListener("click", () => {
       row.dataset.image = "";
-      imageUrl.value = "";
       imageFile.value = "";
-      updateTileThumb(row);
-      persistState();
+      paintThumb();
+      saveState();
       renderWall();
     });
 
-    updateTileThumb(row);
+    paintThumb();
     controls.tileTypes.appendChild(fragment);
   });
 }
 
-function buildStackRects(rows, cols) {
-  const rects = [];
-  for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) rects.push({ r, c });
-  }
-  return rects;
+function getTileTypes() {
+  return [...controls.tileTypes.querySelectorAll(".tile-type-row")].map((row, index) => ({
+    id: index,
+    name: row.querySelector(".tile-name").value || `Tile ${index + 1}`,
+    color: row.querySelector(".tile-color").value,
+    packs: Number(row.querySelector(".tile-pack").value || 0),
+    perPack: Number(row.querySelector(".tiles-per-pack").value || 0),
+    total: Number(row.querySelector(".tile-pack").value || 0) * Number(row.querySelector(".tiles-per-pack").value || 0),
+    image: row.dataset.image || ""
+  }));
 }
 
-function generateTileSelection(totalTiles, tileTypes) {
-  const pool = tileTypes.flatMap((tile) => {
+function randomNoAdjacent(rows, cols, tileTypes) {
+  const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      const left = c > 0 ? grid[r][c - 1] : -1;
+      const up = r > 0 ? grid[r - 1][c] : -1;
+      const options = tileTypes.map((_, i) => i).filter((i) => i !== left && i !== up);
+      grid[r][c] = options[Math.floor(Math.random() * options.length)];
+    }
+  }
+  return grid;
+}
+
+function inventoryPool(tileTypes) {
+  const pool = [];
+  tileTypes.forEach((tile, i) => {
     const variance = Math.floor(Math.random() * 21) - 10;
     const count = Math.max(0, tile.total + variance);
-    return Array.from({ length: count }, () => tile);
+    for (let x = 0; x < count; x += 1) pool.push(i);
   });
-
-  if (!pool.length) return Array.from({ length: totalTiles }, () => tileTypes[0]);
   for (let i = pool.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-
-  return pool.length >= totalTiles
-    ? pool.slice(0, totalTiles)
-    : Array.from({ length: totalTiles }, (_, i) => pool[i % pool.length]);
+  return pool;
 }
 
-function arrangementForCell(patternType, row, col, tileTypes) {
-  const totalTypes = tileTypes.length;
-  const indexBy = {
-    aligned: (row + col) % totalTypes,
-    checker: (row + col) % 2 === 0 ? row % totalTypes : (row + 1) % totalTypes,
-    diagonal: (row * 2 + col) % totalTypes,
-    pinwheel: (Math.floor(row / 2) + Math.floor(col / 2)) % totalTypes
-  };
+function buildPatternGrid(pattern, rows, cols, tileTypes) {
+  const n = tileTypes.length;
+  const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
 
-  return { tile: tileTypes[indexBy[patternType] ?? 0] };
+  if (pattern === "antiNeighborRandom") return randomNoAdjacent(rows, cols, tileTypes);
+
+  if (pattern === "inventoryBlend") {
+    const pool = inventoryPool(tileTypes);
+    let cursor = 0;
+    for (let r = 0; r < rows; r += 1) {
+      for (let c = 0; c < cols; c += 1) {
+        if (!pool.length) {
+          grid[r][c] = (r * 3 + c * 5) % n;
+          continue;
+        }
+        let tries = 0;
+        let idx = pool[cursor % pool.length];
+        while (tries < pool.length) {
+          const left = c > 0 ? grid[r][c - 1] : -1;
+          const up = r > 0 ? grid[r - 1][c] : -1;
+          if (idx !== left && idx !== up) break;
+          cursor += 1;
+          idx = pool[cursor % pool.length];
+          tries += 1;
+        }
+        grid[r][c] = idx;
+        cursor += 1;
+      }
+    }
+    return grid;
+  }
+
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < cols; c += 1) {
+      if (pattern === "latinShift") grid[r][c] = (r * 4 + c * 2 + Math.floor(r / 2)) % n;
+      else if (pattern === "diamondWave") grid[r][c] = (Math.abs(r - c) + r + c) % n;
+      else if (pattern === "checker9") grid[r][c] = (r * 5 + c * 7 + (r % 2) * 3) % n;
+      else grid[r][c] = (r + c) % n;
+    }
+  }
+
+  return grid;
 }
 
 function applyOverlayStyle(el, overlay) {
@@ -233,85 +250,73 @@ function applyOverlayStyle(el, overlay) {
   el.style.height = `${overlay.height}px`;
 }
 
-function attachOverlayDrag(el, overlay) {
-  let startX = 0;
-  let startY = 0;
-  let dragging = false;
-
-  el.addEventListener("pointerdown", (event) => {
-    if (event.target.classList.contains("resize-handle") || event.target.classList.contains("overlay-delete")) return;
-    dragging = true;
-    startX = event.clientX - overlay.x;
-    startY = event.clientY - overlay.y;
-    el.setPointerCapture(event.pointerId);
-  });
-
-  el.addEventListener("pointermove", (event) => {
-    if (!dragging) return;
-    overlay.x = Math.max(0, Math.min(wall.clientWidth - overlay.width, event.clientX - startX));
-    overlay.y = Math.max(0, Math.min(wall.clientHeight - overlay.height, event.clientY - startY));
-    applyOverlayStyle(el, overlay);
-  });
-
-  el.addEventListener("pointerup", () => {
-    if (dragging) persistState();
-    dragging = false;
-  });
-}
-
-function attachOverlayResize(handle, host, overlay) {
-  let resizing = false;
-  let startW = 0;
-  let startH = 0;
-  let startX = 0;
-  let startY = 0;
-
-  handle.addEventListener("pointerdown", (event) => {
-    event.stopPropagation();
-    resizing = true;
-    startW = overlay.width;
-    startH = overlay.height;
-    startX = event.clientX;
-    startY = event.clientY;
-    handle.setPointerCapture(event.pointerId);
-  });
-
-  handle.addEventListener("pointermove", (event) => {
-    if (!resizing) return;
-    overlay.width = Math.max(30, Math.min(wall.clientWidth - overlay.x, startW + (event.clientX - startX)));
-    overlay.height = Math.max(30, Math.min(wall.clientHeight - overlay.y, startH + (event.clientY - startY)));
-    applyOverlayStyle(host, overlay);
-  });
-
-  handle.addEventListener("pointerup", () => {
-    if (resizing) persistState();
-    resizing = false;
-  });
-}
-
 function renderOverlays() {
-  wall.querySelectorAll(".overlay").forEach((el) => el.remove());
+  wall.querySelectorAll(".overlay").forEach((x) => x.remove());
   overlayState.forEach((overlay, index) => {
     const el = document.createElement("div");
     el.className = `overlay ${overlay.shape === "ellipse" ? "ellipse" : ""}`;
     applyOverlayStyle(el, overlay);
 
-    const deleteBtn = document.createElement("button");
-    deleteBtn.className = "overlay-delete";
-    deleteBtn.type = "button";
-    deleteBtn.textContent = "×";
-    deleteBtn.addEventListener("click", () => {
+    const del = document.createElement("button");
+    del.className = "overlay-delete";
+    del.type = "button";
+    del.textContent = "×";
+    del.addEventListener("click", () => {
       overlayState.splice(index, 1);
-      persistState();
+      saveState();
       renderOverlays();
     });
 
     const handle = document.createElement("div");
     handle.className = "resize-handle";
 
-    el.append(deleteBtn, handle);
-    attachOverlayDrag(el, overlay);
-    attachOverlayResize(handle, el, overlay);
+    let drag = false;
+    let sx = 0;
+    let sy = 0;
+    el.addEventListener("pointerdown", (e) => {
+      if (e.target === handle || e.target === del) return;
+      drag = true;
+      sx = e.clientX - overlay.x;
+      sy = e.clientY - overlay.y;
+      el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      overlay.x = Math.max(0, Math.min(wall.clientWidth - overlay.width, e.clientX - sx));
+      overlay.y = Math.max(0, Math.min(wall.clientHeight - overlay.height, e.clientY - sy));
+      applyOverlayStyle(el, overlay);
+    });
+    el.addEventListener("pointerup", () => {
+      if (drag) saveState();
+      drag = false;
+    });
+
+    let resize = false;
+    let sw = 0;
+    let sh = 0;
+    let rx = 0;
+    let ry = 0;
+    handle.addEventListener("pointerdown", (e) => {
+      e.stopPropagation();
+      resize = true;
+      sw = overlay.width;
+      sh = overlay.height;
+      rx = e.clientX;
+      ry = e.clientY;
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener("pointermove", (e) => {
+      if (!resize) return;
+      overlay.width = Math.max(30, Math.min(wall.clientWidth - overlay.x, sw + e.clientX - rx));
+      overlay.height = Math.max(30, Math.min(wall.clientHeight - overlay.y, sh + e.clientY - ry));
+      applyOverlayStyle(el, overlay);
+    });
+    handle.addEventListener("pointerup", () => {
+      if (resize) saveState();
+      resize = false;
+    });
+
+    el.append(del, handle);
     wall.appendChild(el);
   });
 }
@@ -321,58 +326,57 @@ function renderWall() {
   const rows = Math.max(1, Number(controls.rows.value));
   const tileWidthCm = Math.max(1, Number(controls.tileWidthCm.value));
   const tileHeightCm = Math.max(1, Number(controls.tileHeightCm.value));
-  const groutSize = Number(controls.groutSize.value);
-  const viewerScale = Number(controls.viewerScale.value) / 100;
+  const scale = Number(controls.viewerScale.value) / 100;
+  const groutMm = Number(controls.groutSizeMm.value);
 
-  controls.groutSizeValue.textContent = `${groutSize}px`;
   controls.viewerScaleValue.textContent = `${controls.viewerScale.value}%`;
+  controls.groutSizeValue.textContent = `${groutMm.toFixed(1)} mm`;
 
-  const tilePxW = Math.max(8, Math.round(tileWidthCm * 3.6 * viewerScale));
-  const tilePxH = Math.max(8, Math.round(tileHeightCm * 3.6 * viewerScale));
-  const wallWidthPx = columns * tilePxW;
-  const wallHeightPx = rows * tilePxH;
+  const pxPerCm = 3.2 * scale;
+  const tilePxW = tileWidthCm * pxPerCm;
+  const tilePxH = tileHeightCm * pxPerCm;
+  const groutPx = (groutMm / 10) * pxPerCm;
 
+  const wallW = Math.round(columns * tilePxW);
+  const wallH = Math.round(rows * tilePxH);
+
+  wall.style.width = `${wallW}px`;
+  wall.style.height = `${wallH}px`;
   wall.style.background = controls.groutColor.value;
-  wall.style.width = `${wallWidthPx}px`;
-  wall.style.height = `${wallHeightPx}px`;
 
-  wall.querySelectorAll(".tile").forEach((tile) => tile.remove());
+  wall.querySelectorAll(".tile").forEach((x) => x.remove());
 
   const tileTypes = getTileTypes();
-  const rects = buildStackRects(rows, columns);
-  const patternType = controls.patternType.value;
-  const randomTiles = patternType === "random" ? generateTileSelection(rects.length, tileTypes) : null;
+  const patternGrid = buildPatternGrid(controls.patternType.value, rows, columns, tileTypes);
 
-  rects.forEach((rect, index) => {
-    const tile = document.createElement("div");
-    const arrangement = patternType === "random"
-      ? { tile: randomTiles[index % randomTiles.length] }
-      : arrangementForCell(patternType, rect.r, rect.c, tileTypes);
+  for (let r = 0; r < rows; r += 1) {
+    for (let c = 0; c < columns; c += 1) {
+      const idx = patternGrid[r][c] % tileTypes.length;
+      const model = tileTypes[idx];
 
-    tile.className = "tile";
-    tile.style.backgroundColor = arrangement.tile.color;
-
-    if (arrangement.tile.image) {
-      tile.style.backgroundImage = `url(${arrangement.tile.image})`;
-      tile.style.backgroundSize = "cover";
-      tile.style.backgroundPosition = "center";
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      tile.style.left = `${c * tilePxW + groutPx / 2}px`;
+      tile.style.top = `${r * tilePxH + groutPx / 2}px`;
+      tile.style.width = `${Math.max(1, tilePxW - groutPx)}px`;
+      tile.style.height = `${Math.max(1, tilePxH - groutPx)}px`;
+      tile.style.backgroundColor = model.color;
+      if (model.image) {
+        tile.style.backgroundImage = `url(${model.image})`;
+        tile.style.backgroundSize = "cover";
+        tile.style.backgroundPosition = "center";
+      }
+      tile.title = model.name;
+      wall.appendChild(tile);
     }
-
-    tile.title = arrangement.tile.name;
-    tile.style.left = `${rect.c * tilePxW + groutSize / 2}px`;
-    tile.style.top = `${rect.r * tilePxH + groutSize / 2}px`;
-    tile.style.width = `${Math.max(2, tilePxW - groutSize)}px`;
-    tile.style.height = `${Math.max(2, tilePxH - groutSize)}px`;
-
-    wall.appendChild(tile);
-  });
+  }
 
   renderOverlays();
 }
 
-["columns", "rows", "tileWidthCm", "tileHeightCm", "viewerScale", "groutColor", "groutSize", "patternType"].forEach((key) => {
-  controls[key].addEventListener("input", () => {
-    persistState();
+["columns", "rows", "tileWidthCm", "tileHeightCm", "viewerScale", "groutColor", "groutSizeMm", "patternType"].forEach((k) => {
+  controls[k].addEventListener("input", () => {
+    saveState();
     renderWall();
   });
 });
@@ -380,17 +384,15 @@ function renderWall() {
 controls.addOverlay.addEventListener("click", () => {
   overlayState.push({
     shape: controls.overlayShape.value,
-    x: 20 + overlayState.length * 12,
-    y: 20 + overlayState.length * 12,
-    width: 150,
-    height: 110
+    x: 18 + overlayState.length * 10,
+    y: 18 + overlayState.length * 10,
+    width: 140,
+    height: 100
   });
-  persistState();
+  saveState();
   renderOverlays();
 });
 
-window.addEventListener("resize", renderWall);
-
-hydrateState();
+loadState();
 buildTileTypeControls();
 renderWall();
