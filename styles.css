@@ -1,0 +1,208 @@
+:root {
+  --bg: #f3f5ff;
+  --panel: #ffffff;
+  --line: #dce3f5;
+  --text: #192246;
+  --muted: #64709a;
+  --accent: #4866ff;
+  color-scheme: light;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--text); background: var(--bg); }
+
+.app-shell {
+  height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 0.9rem;
+  padding: 0.9rem;
+}
+
+.controls-panel,
+.viewer-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+.controls-panel {
+  padding: 0.8rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.controls-header h1 { margin: 0 0 0.7rem; font-size: 1.15rem; }
+
+fieldset {
+  margin: 0 0 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.6rem;
+}
+
+legend { font-weight: 700; color: #31458f; font-size: 0.9rem; }
+
+.control-grid.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.control-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  min-width: 0;
+}
+.control-row.compact { font-size: 0.74rem; }
+
+input, select, button {
+  width: 100%;
+  font: inherit;
+  border: 1px solid #cbd6f2;
+  border-radius: 8px;
+  padding: 0.38rem 0.48rem;
+  background: #fff;
+  color: var(--text);
+}
+
+.inline-range { display: flex; align-items: center; gap: 0.45rem; }
+.inline-range input[type="range"] { flex: 1; }
+.inline-range strong { min-width: 62px; text-align: right; font-size: 0.76rem; color: #3d4d8d; }
+
+button { cursor: pointer; background: #f4f7ff; font-weight: 600; }
+button:hover { background: #ebf0ff; }
+
+.tile-types {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+
+.tile-type-row {
+  border: 1px solid #d9e2fa;
+  border-radius: 10px;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.45rem;
+  background: #fbfcff;
+}
+
+.tile-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tile-model-id {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #3a4e92;
+  background: #ebf1ff;
+  padding: 0.16rem 0.45rem;
+  border-radius: 999px;
+}
+
+.tile-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px dashed #9fb2ea;
+  background: repeating-conic-gradient(#eef2ff 0 25%, #fafcff 0 50%) 0 / 8px 8px;
+}
+
+.tile-thumb.has-image {
+  background-size: cover;
+  background-position: center;
+  border-style: solid;
+}
+
+.tile-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.42rem;
+}
+
+.tile-image-actions { display: flex; gap: 0.45rem; align-items: center; }
+.upload-image-btn {
+  flex: 1;
+  border: 1px solid #cbd6f2;
+  border-radius: 8px;
+  padding: 0.35rem 0.48rem;
+  background: #fff;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+}
+.upload-image-btn input { display: none; }
+.clear-image { width: auto; min-width: 58px; }
+
+.overlay-row { display: flex; gap: 0.45rem; align-items: end; flex-wrap: wrap; }
+
+.viewer-panel {
+  overflow: auto;
+  display: grid;
+  place-items: center;
+}
+
+.viewer-stage {
+  min-width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+#wall {
+  position: relative;
+  border: 1px solid #95a6dc;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 16px 30px rgba(40, 62, 141, 0.18);
+}
+
+.tile {
+  position: absolute;
+  border-radius: 0;
+}
+
+.overlay {
+  position: absolute;
+  border: 2px solid #2d4fd8;
+  background: rgba(45, 79, 216, 0.95);
+  cursor: move;
+}
+.overlay.ellipse { border-radius: 999px; }
+.resize-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  right: -7px;
+  bottom: -7px;
+  background: #2d4fd8;
+  border-radius: 4px;
+  cursor: nwse-resize;
+}
+.overlay-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  background: #fff;
+  color: #1a2d74;
+  line-height: 1;
+  font-weight: 800;
+}
+
+@media (max-width: 980px) {
+  .app-shell { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+  .controls-panel { max-height: none; }
+}
